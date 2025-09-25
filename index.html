@@ -1,0 +1,1935 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Panel profesional para campañas masivas de WhatsApp con Evolution API v2, programación y reanudación de envíos." />
+  <title>Evolution API - WhatsApp Bulk Sender Pro v4 (Estable + Programación + Reanudar)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root { color-scheme: light dark; }
+    body { min-height: 100vh; }
+    @media (prefers-color-scheme: dark) {
+      body { background:#0b1020; color:#e5e7eb; }
+      .card, .modal-content { background:#0f172a; color:#e5e7eb; }
+      .preview-box { background:#0b1229; border-left:4px solid #6366f1; }
+      .kbd { border-color:#374151; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; scroll-behavior: auto !important; }
+    }
+    #log-output { max-height: 300px; overflow-y:auto; scroll-behavior:smooth; }
+    button { transition: all .2s ease-in-out; }
+    .toast { position:fixed; top:1.25rem; right:1.25rem; z-index:100; transform:translateX(120%); opacity:0; transition: all .5s cubic-bezier(.68,-.55,.27,1.55); min-width: 240px; }
+    .toast.show { transform:translateX(0); opacity:1; }
+    @keyframes spin { from{transform:rotate(0)} to{transform:rotate(360deg)} }
+    .spinner { display:inline-block; border:2px solid #f3f3f3; border-top:2px solid #3498db; border-radius:50%; width:16px; height:16px; animation:spin 1s linear infinite; }
+    .tag { font-size:.72rem; padding:.1rem .4rem; border-radius:.35rem; background:#eef2ff; color:#3730a3; }
+    .metric { display:flex; gap:.5rem; align-items:center; }
+    .metric .dot { width:.5rem; height:.5rem; border-radius:9999px; }
+    .dot-green{ background:#10b981 } .dot-red{ background:#ef4444 } .dot-yellow{ background:#f59e0b } .dot-indigo{ background:#6366f1 }
+    .card { border-radius:.75rem; box-shadow: 0 10px 24px rgb(2 6 23 / .12); }
+    .kbd { display:inline-block; padding:0 .35rem; border:1px solid #e5e7eb; border-bottom-width:2px; border-radius:.25rem; font-size:.75rem; }
+    .tpl-selected { background: rgba(99,102,241,.08); border-color:#6366f1; }
+    .modal { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 90; background-color: rgba(0,0,0,0.45); display: flex; align-items: center; justify-content: center; padding: 1rem; }
+    .modal-content { max-width: 700px; width: 100%; max-height: 80vh; overflow-y: auto; padding: 1.5rem; border-radius: 0.75rem; }
+    .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); border:0; }
+  </style>
+</head>
+<body class="bg-gray-100 text-gray-800 font-sans p-4 md:p-8">
+<div id="toast-container" aria-live="assertive" aria-atomic="true" class="space-y-2"></div>
+
+<div class="max-w-6xl mx-auto card bg-white p-6 md:p-8 space-y-8 shadow-xl">
+  <div class="flex flex-wrap items-center justify-between gap-4">
+    <div>
+      <h1 class="text-2xl md:text-3xl font-bold">WhatsApp Bulk Sender Pro</h1>
+      <p class="text-gray-500">Interfaz de envío masivo con Evolution API</p>
+    </div>
+    <div class="hidden md:flex gap-3 text-xs text-gray-500" aria-live="polite">
+      <div class="metric"><span class="dot dot-indigo"></span><span id="status-api">API: —</span></div>
+      <div class="metric"><span class="dot dot-green"></span><span id="status-rate">Rate: —</span></div>
+      <div class="metric"><span class="dot dot-yellow"></span><span id="status-eta">ETA: —</span></div>
+    </div>
+  </div>
+
+  <!-- Gestión de campañas -->
+  <section class="border-t pt-6" aria-labelledby="campaign-management-title">
+    <h2 id="campaign-management-title" class="text-xl font-semibold mb-3">Gestión de Campañas</h2>
+    <div class="flex flex-wrap gap-4">
+      <button id="btn-open-scheduled" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2">
+        🕒 Ver Programadas <span id="scheduled-count" class="ml-2 bg-blue-200 text-blue-800 text-xs font-bold px-2 py-0.5 rounded-full">0</span>
+      </button>
+      <button id="btn-open-history" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-gray-600 hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2">
+        📚 Ver Historial
+      </button>
+    </div>
+  </section>
+
+  <!-- Paso 1 -->
+  <div id="step-1-upload" class="space-y-8 border-t pt-6" aria-labelledby="api-config-title">
+    <section>
+      <h2 id="api-config-title" class="text-xl font-semibold mb-3">Paso 1: Configuración de la API</h2>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div>
+          <label class="block text-sm font-medium" for="api-url">URL de la API</label>
+          <input id="api-url" placeholder="https://api.example.com"
+                 class="mt-1 w-full px-3 py-2 bg-white border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" autocomplete="url" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium" for="instance-name">Instancia</label>
+          <input id="instance-name" placeholder="instance_name"
+                 class="mt-1 w-full px-3 py-2 bg-white border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" autocomplete="off" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium" for="api-key">API Key</label>
+          <input type="password" id="api-key" placeholder="Tu API Key segura"
+                 class="mt-1 w-full px-3 py-2 bg-white border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" autocomplete="current-password" />
+        </div>
+      </div>
+      <div class="mt-4 flex flex-wrap gap-3">
+        <button id="btn-test-api" class="inline-flex justify-center items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-offset-2">
+          <span id="btn-test-api-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+          </span>
+          <span id="btn-test-api-text">Probar Conexión</span>
+        </button>
+        <button id="btn-clear-storage" class="inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-red-700 bg-red-100 hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-red-400 focus:ring-offset-2">
+          Limpiar Configuración
+        </button>
+      </div>
+    </section>
+
+    <section aria-labelledby="csv-upload-title">
+      <h2 id="csv-upload-title" class="text-xl font-semibold mb-3">Paso 2: Cargar y Previsualizar</h2>
+      <label for="csv-file" class="w-full inline-flex justify-center items-center px-4 py-3 border-2 border-dashed border-gray-300 shadow-sm text-sm font-medium rounded-md bg-white hover:bg-gray-50 cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-offset-2">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-3 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
+        </svg>
+        <span id="csv-label-text">Seleccionar archivo CSV</span>
+      </label>
+      <input type="file" id="csv-file" class="hidden" accept=".csv" />
+
+      <div id="csv-preview" class="hidden mt-6 overflow-x-auto">
+        <h3 class="font-medium mb-2">Vista previa (<span id="total-rows">0</span> filas detectadas)</h3>
+        <table id="csv-table" class="min-w-full divide-y divide-gray-200 border" aria-live="polite"></table>
+        <p class="text-xs text-gray-500 mt-2">Usa variables como <code>{{nombre}}</code>, <code>{{telefono}}</code>. Pega con <span class="kbd">Ctrl</span> + <span class="kbd">V</span>.</p>
+      </div>
+      <div class="mt-4 text-right">
+        <button id="btn-next-step" class="inline-flex items-center px-6 py-3 border border-transparent rounded-md text-white bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-offset-2" disabled>
+          Siguiente
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6"/></svg>
+        </button>
+      </div>
+    </section>
+  </div>
+
+  <!-- Paso 2 -->
+  <div id="step-2-campaign" class="hidden space-y-8" aria-labelledby="campaign-step-title">
+    <section class="border-b pb-6">
+      <div class="flex justify-between items-center">
+        <h2 id="campaign-step-title" class="text-xl font-semibold">Paso 3: Prepara y Lanza tu Campaña</h2>
+        <button id="btn-back" class="inline-flex items-center px-3 py-1 border border-gray-300 text-sm rounded-md bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2">
+          ← Atrás
+        </button>
+      </div>
+
+      <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div class="space-y-4">
+          <div>
+            <h3 class="font-medium mb-2">Tipo de mensaje</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <label class="text-sm" for="msg-type">Tipo</label>
+                <select id="msg-type" class="mt-1 w-full border-gray-300 rounded-md" aria-label="Seleccionar tipo de mensaje">
+                  <option value="text" selected>Texto</option>
+                  <option value="image">Imagen (URL)</option>
+                  <option value="document">Documento (URL)</option>
+                  <option value="buttons">Botones (interactivo)</option>
+                  <option value="list">Lista (interactivo)</option>
+                  <option value="audio">Audio (WA)</option>
+                  <option value="sticker">Sticker</option>
+                  <option value="location">Ubicación</option>
+                  <option value="contact">Contacto</option>
+                </select>
+              </div>
+              <div>
+                <label class="text-sm" for="media-url">URL Media (img/doc/video/audio/sticker)</label>
+                <input id="media-url" placeholder="https://..." class="mt-1 w-full border-gray-300 rounded-md px-3 py-2" />
+              </div>
+              <div class="md:col-span-2">
+                <label class="text-sm" for="interactive-json">JSON interactivo / Opciones avanzadas</label>
+                <textarea id="interactive-json" rows="3" placeholder='{"mimetype":"image/png","fileName":"promo.png","delay":1200,"linkPreview":false}'
+                          class="mt-1 w-full border-gray-300 rounded-md px-3 py-2"></textarea>
+                <p class="text-xs text-gray-500 mt-1">
+                  Aquí puedes sobreescribir <code>mimetype</code>, <code>fileName</code>, <code>delay</code>, <code>linkPreview</code>, <code>mentionsEveryOne</code>, <code>mentioned</code>, <code>quoted</code> y para audio: <code>ptt</code>, <code>voice</code>, <code>seconds</code>.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <h3 class="font-medium mb-2">Crear Mensaje</h3>
+            <div class="mb-2 text-xs text-gray-500">Haz clic en una variable para insertarla:</div>
+            <div id="csv-columns" class="flex flex-wrap gap-2 mb-3"></div>
+            <textarea id="message-template" rows="6"
+                      class="w-full px-3 py-2 bg-white border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500"
+                      placeholder="Escribe tu mensaje aquí..."></textarea>
+            <div class="mt-3">
+              <div class="flex items-center gap-2"><span class="tag">Vista previa</span><span id="preview-phone" class="text-xs text-gray-500"></span></div>
+              <div id="message-preview" class="mt-1 p-3 preview-box rounded-md text-sm whitespace-pre-wrap" aria-live="polite"><span class="text-gray-500">Escribe un mensaje para ver la vista previa...</span></div>
+            </div>
+          </div>
+
+          <div class="border rounded-md p-3">
+            <div class="flex items-center justify-between mb-2">
+              <h3 class="font-medium">Biblioteca de plantillas</h3>
+              <div class="flex gap-2">
+                <input id="tpl-search" placeholder="Buscar..." class="border rounded px-2 py-1 text-sm" aria-label="Buscar plantillas" />
+                <select id="tpl-category-filter" class="border rounded px-2 py-1 text-sm" aria-label="Filtrar por categoría">
+                  <option value="">Todas</option>
+                </select>
+              </div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div class="space-y-2">
+                <ul id="tpl-list" class="text-sm max-h-48 overflow-auto border rounded p-2" aria-live="polite"></ul>
+              </div>
+              <div class="space-y-2">
+                <div class="grid grid-cols-2 gap-2">
+                  <input id="tpl-name" placeholder="Nombre" class="border rounded px-2 py-1 text-sm" aria-label="Nombre de la plantilla" />
+                  <input id="tpl-category" placeholder="Categoría" class="border rounded px-2 py-1 text-sm" aria-label="Categoría de la plantilla" />
+                </div>
+                <button id="tpl-save" class="px-3 py-2 text-sm rounded bg-indigo-600 text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-offset-2">Guardar plantilla actual</button>
+                <button id="tpl-delete" class="px-3 py-2 text-sm rounded bg-red-600 text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-400 focus:ring-offset-2">Eliminar seleccionada</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="space-y-4">
+          <div class="border rounded-md p-3">
+            <h3 class="font-medium mb-3">Filtro de Datos (Opcional)</h3>
+            <div class="flex flex-wrap gap-4 mb-3">
+              <label class="inline-flex items-center gap-2 text-sm"><input id="filter-enabled" type="checkbox" class="h-4 w-4 text-indigo-600 rounded"> Activar filtro</label>
+              <label class="inline-flex items-center gap-2 text-sm"><input id="dedupe-enabled" type="checkbox" class="h-4 w-4 text-indigo-600 rounded" checked> Desduplicar teléfonos</label>
+              <label class="inline-flex items-center gap-2 text-sm"><input id="dryrun-enabled" type="checkbox" class="h-4 w-4 text-indigo-600 rounded"> Simulación (no enviar)</label>
+            </div>
+            <div id="filter-controls" class="grid grid-cols-3 gap-2 hidden">
+              <select id="filter-column" class="border rounded px-2 py-1 text-sm"></select>
+              <select id="filter-operator" class="border rounded px-2 py-1 text-sm">
+                <option value="==">es igual a</option>
+                <option value="!=">es diferente de</option>
+                <option value=">">es mayor que</option>
+                <option value="<">es menor que</option>
+                <option value="contains">contiene</option>
+              </select>
+              <input id="filter-value" class="border rounded px-2 py-1 text-sm" placeholder="Valor" />
+            </div>
+            <div id="filter-summary" class="text-sm text-blue-600 mt-2 hidden"></div>
+          </div>
+
+          <div class="border rounded-md p-3">
+            <h3 class="font-medium mb-3">Configurar Envío</h3>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="text-sm" for="phone-column">Columna teléfono</label>
+                <select id="phone-column" class="mt-1 w-full border rounded px-2 py-2 text-sm"></select>
+              </div>
+              <div>
+                <label class="text-sm" for="country-code">Código de país</label>
+                <select id="country-code" class="mt-1 w-full border rounded px-2 py-2 text-sm">
+                  <option value="57" selected>+57 (Colombia)</option>
+                  <option value="1">+1 (EE. UU./Canadá)</option>
+                  <option value="52">+52 (México)</option>
+                  <option value="54">+54 (Argentina)</option>
+                  <option value="55">+55 (Brasil)</option>
+                  <option value="56">+56 (Chile)</option>
+                  <option value="34">+34 (España)</option>
+                  <option value="51">+51 (Perú)</option>
+                  <option value="593">+593 (Ecuador)</option>
+                  <option value="58">+58 (Venezuela)</option>
+                  <option value="598">+598 (Uruguay)</option>
+                  <option value="595">+595 (Paraguay)</option>
+                  <option value="506">+506 (Costa Rica)</option>
+                  <option value="507">+507 (Panamá)</option>
+                  <option value="504">+504 (Honduras)</option>
+                  <option value="503">+503 (El Salvador)</option>
+                  <option value="502">+502 (Guatemala)</option>
+                  <option value="505">+505 (Nicaragua)</option>
+                </select>
+              </div>
+              <div>
+                <label class="text-sm" for="delay">Retraso base (seg)</label>
+                <input type="number" id="delay" value="10" min="1" class="mt-1 w-full border rounded px-2 py-2 text-sm" />
+              </div>
+              <div>
+                <label class="text-sm" for="rate">Límite de tasa (msg/min)</label>
+                <input type="number" id="rate" value="0" min="0" class="mt-1 w-full border rounded px-2 py-2 text-sm" placeholder="0 = usa retraso" />
+              </div>
+              <div>
+                <label class="text-sm" for="jitter">Jitter ±%</label>
+                <input type="number" id="jitter" value="15" min="0" max="50" class="mt-1 w-full border rounded px-2 py-2 text-sm" />
+              </div>
+              <div>
+                <label class="text-sm" for="retries">Reintentos por error</label>
+                <input type="number" id="retries" value="2" min="0" max="5" class="mt-1 w-full border rounded px-2 py-2 text-sm" />
+              </div>
+            </div>
+          </div>
+
+          <div class="border rounded-md p-3">
+            <h3 class="font-medium mb-3">Programación y Nombre</h3>
+            <div class="grid grid-cols-1 gap-3">
+              <div>
+                <label class="text-sm" for="campaign-name">Nombre de la Campaña (para identificar)</label>
+                <input type="text" id="campaign-name" placeholder="Ej: Promo Septiembre" class="mt-1 w-full border rounded px-2 py-2 text-sm" />
+              </div>
+              <div>
+                <label class="text-sm" for="schedule-dt">Programar para (fecha y hora local)</label>
+                <input type="datetime-local" id="schedule-dt" class="mt-1 w-full border rounded px-2 py-2 text-sm" />
+              </div>
+            </div>
+            <p class="text-xs text-gray-500 mt-2">Deja la fecha vacía para iniciar ahora, o elígela y usa “Programar Campaña”.</p>
+          </div>
+
+          <div class="border rounded-md p-3">
+            <div class="flex items-center justify-between">
+              <h3 class="font-medium">Asistente de pre-envío</h3>
+              <button id="btn-refresh-checklist" class="text-sm px-3 py-1 rounded bg-white border hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-offset-2">Actualizar</button>
+            </div>
+            <ul id="precheck-list" class="mt-2 text-sm space-y-1"></ul>
+          </div>
+
+          <div class="grid grid-cols-2 gap-3">
+            <button id="btn-start" class="inline-flex justify-center items-center px-6 py-3 rounded-md text-white bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-offset-2">
+              <span id="btn-start-icon"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg></span>
+              <span id="btn-start-text">Iniciar Ahora</span>
+            </button>
+            <button id="btn-schedule" class="inline-flex justify-center items-center px-6 py-3 rounded-md text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2 2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+              <span>Programar Campaña</span>
+            </button>
+          </div>
+
+          <div class="flex flex-wrap gap-3">
+            <button id="btn-pause" class="flex-1 px-6 py-3 rounded-md bg-white border hover:bg-gray-100 disabled:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-300 focus:ring-offset-2" disabled>Pausar</button>
+            <button id="btn-stop" class="flex-1 px-6 py-3 rounded-md bg-white border hover:bg-gray-100 disabled:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-300 focus:ring-offset-2" disabled>Detener</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="live-metrics-section" class="hidden" aria-labelledby="live-metrics-title">
+      <h3 id="live-metrics-title" class="sr-only">Métricas en vivo</h3>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div class="border rounded-md p-3">
+          <h3 class="font-medium mb-2">Métricas en vivo</h3>
+          <div class="text-sm space-y-1" aria-live="polite">
+            <div class="metric"><span class="dot dot-green"></span> Enviados: <span id="m-sent" class="ml-1">0</span></div>
+            <div class="metric"><span class="dot dot-red"></span> Errores: <span id="m-errors" class="ml-1">0</span></div>
+            <div class="metric"><span class="dot dot-yellow"></span> Omitidos: <span id="m-skipped" class="ml-1">0</span></div>
+            <div>Ratio (últ. min): <span id="m-rpm">0</span> msg/min</div>
+            <div>Estimado restante: <span id="m-eta">—</span></div>
+          </div>
+        </div>
+        <div class="md:col-span-2 border rounded-md p-3">
+          <div class="flex justify-between items-center">
+            <h3 class="font-medium">Registro de Progreso</h3>
+            <button id="btn-download-log" class="hidden inline-flex items-center px-3 py-1 rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-offset-2">Descargar Registro</button>
+          </div>
+          <div class="w-full bg-gray-200 rounded-full h-2.5 my-3" aria-hidden="true"><div id="progress-bar" class="bg-indigo-600 h-2.5 rounded-full" style="width:0%"></div></div>
+          <div id="log-output" class="w-full bg-gray-900 text-white font-mono text-sm rounded p-3 h-64" role="log" aria-live="polite"></div>
+          <div id="final-summary" class="hidden mt-3 p-3 bg-gray-50 rounded text-center"></div>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<!-- Modales -->
+<div id="scheduled-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="scheduled-title">
+  <div class="modal-content card bg-white">
+    <div class="flex justify-between items-center mb-4">
+      <h2 id="scheduled-title" class="text-xl font-semibold">Campañas Programadas</h2>
+      <button id="btn-close-scheduled" class="text-gray-500 hover:text-gray-800 text-2xl font-bold" aria-label="Cerrar listado de campañas programadas">&times;</button>
+    </div>
+    <div id="scheduled-list" class="space-y-3"></div>
+  </div>
+</div>
+
+<div id="history-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="history-title">
+  <div class="modal-content card bg-white">
+    <div class="flex justify-between items-center mb-4">
+      <h2 id="history-title" class="text-xl font-semibold">Historial de Envíos</h2>
+      <div>
+        <button id="btn-clear-history" class="text-sm text-red-600 hover:underline mr-4">Limpiar historial</button>
+        <button id="btn-close-history" class="text-gray-500 hover:text-gray-800 text-2xl font-bold" aria-label="Cerrar historial">&times;</button>
+      </div>
+    </div>
+    <div id="history-list" class="space-y-3"></div>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+class WhatsAppSender {
+  constructor() {
+    this.state = {
+      csvData: [],
+      csvHeaders: [],
+      csvContent: '',
+      isSending: false,
+      isPaused: false,
+      index: 0,
+      success: 0,
+      errors: 0,
+      skipped: 0,
+      startedAt: null,
+      lastTickStamps: [],
+      queue: [],
+      logContent: '',
+      templatesKey: 'wabs_templates_v4',
+      draftKey: 'campaignDraft_v4',
+      configKey: 'apiConfig_v4',
+      scheduledKey: 'scheduledCampaigns_v4',
+      historyKey: 'campaignHistory_v4',
+      resumeToken: 'wabs_campaign_state_v4',
+      lastApiState: null,
+      scheduler: null,
+      currentCampaignId: null
+    };
+
+    this.cacheDOM();
+    this.init();
+  }
+
+  cacheDOM() {
+    const $ = (id) => document.getElementById(id);
+    this.ui = {
+      scheduledModal: $('scheduled-modal'),
+      historyModal: $('history-modal'),
+      btnOpenScheduled: $('btn-open-scheduled'),
+      btnOpenHistory: $('btn-open-history'),
+      btnCloseScheduled: $('btn-close-scheduled'),
+      btnCloseHistory: $('btn-close-history'),
+      scheduledList: $('scheduled-list'),
+      historyList: $('history-list'),
+      scheduledCount: $('scheduled-count'),
+      btnClearHistory: $('btn-clear-history'),
+      liveMetricsSection: $('live-metrics-section'),
+      step1: $('step-1-upload'),
+      step2: $('step-2-campaign'),
+      btnNextStep: $('btn-next-step'),
+      btnBack: $('btn-back'),
+      apiUrl: $('api-url'),
+      instanceName: $('instance-name'),
+      apiKey: $('api-key'),
+      btnTestApi: $('btn-test-api'),
+      btnTestApiText: $('btn-test-api-text'),
+      btnTestApiIcon: $('btn-test-api-icon'),
+      btnClearStorage: $('btn-clear-storage'),
+      statusApi: $('status-api'),
+      csvFileInput: $('csv-file'),
+      csvLabelText: $('csv-label-text'),
+      csvPreview: $('csv-preview'),
+      csvTable: $('csv-table'),
+      totalRows: $('total-rows'),
+      csvColumnsContainer: $('csv-columns'),
+      msgType: $('msg-type'),
+      mediaUrl: $('media-url'),
+      interactiveJson: $('interactive-json'),
+      messageTemplate: $('message-template'),
+      messagePreview: $('message-preview'),
+      previewPhone: $('preview-phone'),
+      phoneColumnSelect: $('phone-column'),
+      delay: $('delay'),
+      rate: $('rate'),
+      jitter: $('jitter'),
+      retries: $('retries'),
+      countryCode: $('country-code'),
+      filter: {
+        enabled: $('filter-enabled'),
+        controls: $('filter-controls'),
+        column: $('filter-column'),
+        operator: $('filter-operator'),
+        value: $('filter-value'),
+        summary: $('filter-summary')
+      },
+      dedupeEnabled: $('dedupe-enabled'),
+      dryrunEnabled: $('dryrun-enabled'),
+      campaignName: $('campaign-name'),
+      scheduleDt: $('schedule-dt'),
+      precheckList: $('precheck-list'),
+      refreshChecklist: $('btn-refresh-checklist'),
+      btnStart: $('btn-start'),
+      btnSchedule: $('btn-schedule'),
+      btnPause: $('btn-pause'),
+      btnStop: $('btn-stop'),
+      logOutput: $('log-output'),
+      progressBar: $('progress-bar'),
+      btnDownloadLog: $('btn-download-log'),
+      finalSummary: $('final-summary'),
+      mSent: $('m-sent'),
+      mErrors: $('m-errors'),
+      mSkipped: $('m-skipped'),
+      mRpm: $('m-rpm'),
+      mEta: $('m-eta'),
+      statusRate: $('status-rate'),
+      statusEta: $('status-eta'),
+      tplList: $('tpl-list'),
+      tplSearch: $('tpl-search'),
+      tplName: $('tpl-name'),
+      tplCategory: $('tpl-category'),
+      tplCategoryFilter: $('tpl-category-filter'),
+      tplSave: $('tpl-save'),
+      tplDelete: $('tpl-delete'),
+      toastContainer: document.getElementById('toast-container')
+    };
+  }
+
+  init() {
+    this.loadConfig();
+    this.loadDraft();
+    this.bindEvents();
+    this.ui.logOutput.innerHTML = '<p class="text-gray-400">Listo para comenzar...</p>';
+    this.loadTemplatesUI();
+    this.updateMessagePreview();
+    this.refreshChecklist();
+    this.initScheduler();
+    this.renderScheduledList();
+    this.renderHistoryList();
+    this.tryAutoResume();
+
+    window.addEventListener('keydown', (event) => {
+      if (event.ctrlKey && event.key === 'Enter') {
+        event.preventDefault();
+        this.ui.btnStart.click();
+      }
+      if (event.key === ' ') {
+        if (this.state.isSending) {
+          event.preventDefault();
+          this.togglePause();
+        }
+      }
+      if (event.key === 'Escape' && this.state.isSending) {
+        event.preventDefault();
+        this.state.isSending = false;
+      }
+    });
+
+    window.addEventListener('error', (event) => {
+      this.showToast('Error: ' + (event.message || 'desconocido'), 'error');
+    });
+  }
+
+  bindEvents() {
+    this.ui.btnOpenScheduled.addEventListener('click', () => this.openModal(this.ui.scheduledModal));
+    this.ui.btnCloseScheduled.addEventListener('click', () => this.closeModal(this.ui.scheduledModal));
+    this.ui.btnOpenHistory.addEventListener('click', () => this.openModal(this.ui.historyModal));
+    this.ui.btnCloseHistory.addEventListener('click', () => this.closeModal(this.ui.historyModal));
+    this.ui.btnClearHistory.addEventListener('click', () => this.clearHistory());
+
+    const saveCfg = () => this.saveConfig();
+    this.ui.apiUrl.addEventListener('change', saveCfg);
+    this.ui.instanceName.addEventListener('change', saveCfg);
+    this.ui.apiKey.addEventListener('change', saveCfg);
+    this.ui.btnClearStorage.addEventListener('click', () => this.clearConfig());
+    this.ui.btnTestApi.addEventListener('click', () => this.testApiConnection());
+
+    this.ui.csvFileInput.addEventListener('change', (event) => this.handleCsvFile(event));
+    this.ui.btnNextStep.addEventListener('click', () => { this.showStep(2); this.refreshChecklist(); });
+    this.ui.btnBack.addEventListener('click', () => { this.resetCampaignState(false); this.showStep(1); });
+
+    ['messageTemplate','msgType','mediaUrl','interactiveJson','campaignName','scheduleDt'].forEach((id) => {
+      const element = this.ui[id];
+      if (element) {
+        element.addEventListener('input', () => {
+          this.updateMessagePreview();
+          this.saveDraft();
+          this.refreshChecklist();
+        });
+      }
+    });
+
+    ['phoneColumnSelect','delay','rate','jitter','retries','countryCode'].forEach((key) => {
+      const element = this.ui[key];
+      if (element) {
+        const handler = () => {
+          this.updatePreviewPhone();
+          this.saveDraft();
+          this.refreshChecklist();
+        };
+        element.addEventListener('change', handler);
+        element.addEventListener('input', handler);
+      }
+    });
+
+    this.ui.filter.enabled.addEventListener('change', () => this.toggleFilterControls());
+    [this.ui.filter.column, this.ui.filter.operator, this.ui.filter.value].forEach((element) => {
+      element.addEventListener('input', () => {
+        this.updateFilterSummary();
+        this.saveDraft();
+        this.refreshChecklist();
+      });
+      element.addEventListener('change', () => {
+        this.updateFilterSummary();
+        this.saveDraft();
+        this.refreshChecklist();
+      });
+    });
+    this.ui.dedupeEnabled.addEventListener('change', () => { this.saveDraft(); this.refreshChecklist(); });
+    this.ui.dryrunEnabled.addEventListener('change', () => { this.saveDraft(); this.refreshChecklist(); });
+
+    this.ui.refreshChecklist.addEventListener('click', () => this.refreshChecklist());
+
+    this.ui.btnStart.addEventListener('click', () => this.handleStartClick());
+    this.ui.btnSchedule.addEventListener('click', () => this.handleScheduleClick());
+    this.ui.btnPause.addEventListener('click', () => this.togglePause());
+    this.ui.btnStop.addEventListener('click', () => { if (this.state.isSending) this.state.isSending = false; });
+
+    this.ui.tplSave.addEventListener('click', () => this.saveCurrentTemplate());
+    this.ui.tplDelete.addEventListener('click', () => this.deleteSelectedTemplate());
+    this.ui.tplSearch.addEventListener('input', () => this.renderTemplateList());
+    this.ui.tplCategoryFilter.addEventListener('change', () => this.renderTemplateList());
+    this.ui.tplList.addEventListener('click', (event) => {
+      const listItem = event.target.closest('li');
+      if (!listItem) return;
+      Array.from(this.ui.tplList.children).forEach((node) => node.classList.remove('tpl-selected'));
+      listItem.classList.add('tpl-selected');
+    });
+
+    window.addEventListener('beforeunload', (event) => {
+      if (this.state.isSending) {
+        event.preventDefault();
+        event.returnValue = '';
+      }
+    });
+  }
+
+  openModal(modal) {
+    if (!modal) return;
+    modal.classList.remove('hidden');
+    modal.setAttribute('aria-hidden', 'false');
+    const focusable = modal.querySelector('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+    if (focusable) focusable.focus();
+  }
+
+  closeModal(modal) {
+    if (!modal) return;
+    modal.classList.add('hidden');
+    modal.setAttribute('aria-hidden', 'true');
+  }
+
+  async ensurePapa() {
+    if (window.Papa) return true;
+    const urls = [
+      'https://cdnjs.cloudflare.com/ajax/libs/papaparse/5.4.1/papaparse.min.js',
+      'https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js',
+      'https://unpkg.com/papaparse@5.4.1/papaparse.min.js'
+    ];
+    for (const url of urls) {
+      try {
+        await this.loadExternalScript(url);
+        if (window.Papa) {
+          console.info('PapaParse cargado desde:', url);
+          return true;
+        }
+      } catch (error) {
+        console.warn('Falló la carga de PapaParse desde', url, error);
+      }
+    }
+    this.showToast('Error crítico: No se pudo cargar la librería para leer CSVs.', 'error');
+    return false;
+  }
+
+  loadExternalScript(src) {
+    return new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = src;
+      script.async = true;
+      script.onload = () => resolve();
+      script.onerror = () => reject(new Error('Failed to load ' + src));
+      document.head.appendChild(script);
+    });
+  }
+
+  sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  jitterMs(baseMs, pct = 15) {
+    const factor = Math.max(0, Math.min(50, Number(pct) || 0)) / 100;
+    const min = 1 - factor;
+    const max = 1 + factor;
+    return Math.max(0, Math.round(baseMs * (min + Math.random() * (max - min))));
+  }
+
+  toE164(raw, cc = '57') {
+    if (!raw) return '';
+    let value = String(raw).trim();
+    const hasPlus = value.startsWith('+');
+    value = value.replace(/[^\d+]/g, '');
+    if (hasPlus && value.startsWith('+')) value = value.slice(1);
+    const digits = value.replace(/\D/g, '');
+    if (!/^\d{8,15}$/.test(digits)) {
+      if (/^3\d{9}$/.test(digits)) value = cc + digits; else value = digits;
+    } else value = digits;
+    return /^\d{8,15}$/.test(value) ? value : '';
+  }
+
+  prettyEta(ms) {
+    const seconds = Math.ceil(ms / 1000);
+    if (seconds < 60) return seconds + 's';
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    if (minutes < 60) return minutes + 'm ' + remainingSeconds + 's';
+    const hours = Math.floor(minutes / 60);
+    const remainingMinutes = minutes % 60;
+    return hours + 'h ' + remainingMinutes + 'm';
+  }
+
+  guessMimeFromUrl(url) {
+    const path = (url || '').split('?')[0].toLowerCase();
+    if (path.endsWith('.jpg') || path.endsWith('.jpeg')) return 'image/jpeg';
+    if (path.endsWith('.png')) return 'image/png';
+    if (path.endsWith('.gif')) return 'image/gif';
+    if (path.endsWith('.webp')) return 'image/webp';
+    if (path.endsWith('.mp4')) return 'video/mp4';
+    if (path.endsWith('.mov')) return 'video/quicktime';
+    if (path.endsWith('.pdf')) return 'application/pdf';
+    if (path.endsWith('.docx')) return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    if (path.endsWith('.xlsx')) return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+    if (path.endsWith('.csv')) return 'text/csv';
+    if (path.endsWith('.mp3')) return 'audio/mpeg';
+    if (path.endsWith('.ogg') || path.endsWith('.oga')) return 'audio/ogg';
+    if (path.endsWith('.opus')) return 'audio/opus';
+    return undefined;
+  }
+
+  fileNameFromUrl(url) {
+    try {
+      const clean = (url || '').split('?')[0];
+      const name = clean.substring(clean.lastIndexOf('/') + 1) || 'file';
+      return decodeURIComponent(name);
+    } catch (error) {
+      console.warn('No se pudo obtener nombre del archivo desde la URL', error);
+      return 'file';
+    }
+  }
+
+  parseAdvancedOptions(rawJson) {
+    if (!rawJson) return {};
+    try {
+      const parsed = JSON.parse(rawJson);
+      const output = {};
+      if ('delay' in parsed) output.delay = Number(parsed.delay) || undefined;
+      if ('linkPreview' in parsed) output.linkPreview = !!parsed.linkPreview;
+      if ('mentionsEveryOne' in parsed) output.mentionsEveryOne = !!parsed.mentionsEveryOne;
+      if (Array.isArray(parsed.mentioned)) output.mentioned = parsed.mentioned;
+      if (parsed.quoted && typeof parsed.quoted === 'object') output.quoted = parsed.quoted;
+      if (parsed.mimetype) output.mimetype = String(parsed.mimetype);
+      if (parsed.fileName) output.fileName = String(parsed.fileName);
+      if ('ptt' in parsed) output.ptt = !!parsed.ptt;
+      if ('voice' in parsed) output.voice = !!parsed.voice;
+      if ('seconds' in parsed) output.seconds = Number(parsed.seconds) || undefined;
+      return output;
+    } catch (error) {
+      console.warn('JSON de opciones avanzadas inválido', error);
+      return {};
+    }
+  }
+
+  showToast(message, type = 'error') {
+    const colors = { error: 'bg-red-500', success: 'bg-green-500', info: 'bg-blue-500', warning: 'bg-yellow-500' };
+    const toast = document.createElement('div');
+    toast.className = 'toast p-3 rounded text-white shadow ' + (colors[type] || 'bg-gray-700');
+    toast.setAttribute('role', 'alert');
+    toast.textContent = message;
+    this.ui.toastContainer.appendChild(toast);
+    requestAnimationFrame(() => toast.classList.add('show'));
+    setTimeout(() => {
+      toast.classList.remove('show');
+      setTimeout(() => toast.remove(), 400);
+    }, 4500);
+  }
+
+  log(message, type = 'info') {
+    const paragraph = document.createElement('p');
+    const colors = { success: 'text-green-400', error: 'text-red-400', warning: 'text-yellow-400' };
+    const icons = { success: '🟢', error: '🔴', warning: '🟡', info: '🔵' };
+    paragraph.className = (colors[type] || 'text-gray-300') + ' whitespace-pre-wrap';
+    paragraph.innerHTML = (icons[type] || '') + ' ' + message;
+    this.ui.logOutput.appendChild(paragraph);
+    this.ui.logOutput.scrollTop = this.ui.logOutput.scrollHeight;
+    this.state.logContent += message + '\n';
+  }
+
+  setLoading(button, iconElement, textElement, isLoading) {
+    const spinner = '<div class="spinner mr-2"></div>';
+    if (!iconElement.dataset.defaultIcon) iconElement.dataset.defaultIcon = iconElement.innerHTML;
+    if (!textElement.dataset.defaultText) textElement.dataset.defaultText = textElement.textContent;
+    button.disabled = isLoading;
+    iconElement.innerHTML = isLoading ? spinner : iconElement.dataset.defaultIcon;
+    textElement.textContent = isLoading ? 'Probando...' : textElement.dataset.defaultText;
+  }
+
+  saveConfig() {
+    const config = {
+      url: this.ui.apiUrl.value.trim(),
+      instance: this.ui.instanceName.value.trim(),
+      key: this.ui.apiKey.value.trim(),
+      lastApiState: this.state.lastApiState
+    };
+    localStorage.setItem(this.state.configKey, JSON.stringify(config));
+  }
+
+  loadConfig() {
+    const raw = localStorage.getItem(this.state.configKey);
+    if (!raw) return;
+    try {
+      const config = JSON.parse(raw);
+      this.ui.apiUrl.value = config.url || '';
+      this.ui.instanceName.value = config.instance || '';
+      this.ui.apiKey.value = config.key || '';
+      this.state.lastApiState = config.lastApiState || null;
+      if (this.state.lastApiState) this.ui.statusApi.textContent = 'API: ' + this.state.lastApiState;
+    } catch (error) {
+      console.warn('No se pudo cargar la configuración guardada', error);
+    }
+  }
+
+  clearConfig() {
+    if (!confirm('¿Borrar configuración de API guardada?')) return;
+    localStorage.removeItem(this.state.configKey);
+    this.ui.apiUrl.value = '';
+    this.ui.instanceName.value = '';
+    this.ui.apiKey.value = '';
+    this.ui.statusApi.textContent = 'API: —';
+    this.showToast('Configuración eliminada', 'info');
+  }
+
+  saveDraft() {
+    const draft = {
+      phoneCol: this.ui.phoneColumnSelect.value || '',
+      delay: this.ui.delay.value || '10',
+      rate: this.ui.rate.value || '0',
+      jitter: this.ui.jitter.value || '15',
+      retries: this.ui.retries.value || '2',
+      template: this.ui.messageTemplate.value || '',
+      msgType: this.ui.msgType.value,
+      mediaUrl: this.ui.mediaUrl.value || '',
+      interactiveJson: this.ui.interactiveJson.value || '',
+      country: this.ui.countryCode.value || '57',
+      filterEnabled: this.ui.filter.enabled.checked,
+      filter: {
+        col: this.ui.filter.column.value || '',
+        op: this.ui.filter.operator.value || '==',
+        val: this.ui.filter.value.value || ''
+      },
+      dedupe: this.ui.dedupeEnabled.checked,
+      dryrun: this.ui.dryrunEnabled.checked,
+      scheduleDt: this.ui.scheduleDt.value || '',
+      campaignName: this.ui.campaignName.value || ''
+    };
+    localStorage.setItem(this.state.draftKey, JSON.stringify(draft));
+  }
+
+  loadDraft() {
+    const raw = localStorage.getItem(this.state.draftKey);
+    if (!raw) return;
+    try {
+      const draft = JSON.parse(raw);
+      this.ui.delay.value = draft.delay || '10';
+      this.ui.rate.value = draft.rate || '0';
+      this.ui.jitter.value = draft.jitter || '15';
+      this.ui.retries.value = draft.retries || '2';
+      this.ui.messageTemplate.value = draft.template || '';
+      this.ui.msgType.value = draft.msgType || 'text';
+      this.ui.mediaUrl.value = draft.mediaUrl || '';
+      this.ui.interactiveJson.value = draft.interactiveJson || '';
+      if (draft.country) this.ui.countryCode.value = draft.country;
+      this.ui.filter.enabled.checked = !!draft.filterEnabled;
+      this.toggleFilterControls();
+      this.ui.dedupeEnabled.checked = draft.dedupe !== false;
+      this.ui.dryrunEnabled.checked = !!draft.dryrun;
+      this.ui.scheduleDt.value = draft.scheduleDt || '';
+      this.ui.campaignName.value = draft.campaignName || '';
+    } catch (error) {
+      console.warn('No se pudo cargar el borrador guardado', error);
+    }
+  }
+
+  saveCampaignState(settings) {
+    const payload = {
+      isSending: this.state.isSending,
+      isPaused: this.state.isPaused,
+      index: this.state.index,
+      success: this.state.success,
+      errors: this.state.errors,
+      skipped: this.state.skipped,
+      startedAt: this.state.startedAt,
+      lastTickStamps: this.state.lastTickStamps,
+      queue: this.state.queue,
+      csvHeaders: this.state.csvHeaders,
+      csvContent: this.state.csvContent || null,
+      currentCampaignId: this.state.currentCampaignId,
+      settings
+    };
+    localStorage.setItem(this.state.resumeToken, JSON.stringify(payload));
+  }
+
+  loadCampaignState() {
+    const raw = localStorage.getItem(this.state.resumeToken);
+    if (!raw) return null;
+    try {
+      return JSON.parse(raw);
+    } catch (error) {
+      console.warn('No se pudo interpretar el estado de campaña', error);
+      return null;
+    }
+  }
+
+  clearCampaignState() {
+    localStorage.removeItem(this.state.resumeToken);
+  }
+
+  async tryAutoResume() {
+    const storedState = this.loadCampaignState();
+    if (!storedState || !storedState.isSending) return;
+    this.state.index = storedState.index || 0;
+    this.state.success = storedState.success || 0;
+    this.state.errors = storedState.errors || 0;
+    this.state.skipped = storedState.skipped || 0;
+    this.state.queue = storedState.queue || [];
+    this.state.csvHeaders = storedState.csvHeaders || [];
+    this.state.startedAt = storedState.startedAt || Date.now();
+    this.state.lastTickStamps = storedState.lastTickStamps || [];
+    this.state.currentCampaignId = storedState.currentCampaignId || ('resumed_' + Date.now());
+
+    if (!this.state.queue.length && storedState.csvContent && storedState.settings && storedState.settings.phoneCol) {
+      const papaLoaded = await this.ensurePapa();
+      if (!papaLoaded) return;
+      const parsed = window.Papa.parse(storedState.csvContent, { header: true, skipEmptyLines: true });
+      this.state.csvData = parsed.data;
+      this.state.csvHeaders = parsed.meta.fields || [];
+      const cc = storedState.settings.cc || this.ui.countryCode.value || '57';
+      const column = storedState.settings.phoneCol;
+      const mapped = this.state.csvData.map((row) => ({ row, e164: this.toE164(row[column], cc), retries: 0 })).filter((item) => !!item.e164);
+      this.state.queue = mapped;
+    }
+
+    this.updateMetricsUI();
+    this.showStep(2);
+    this.log('Restaurando campaña en curso...', 'info');
+    this.setSendingState(true);
+    this.loopSend(storedState.settings);
+  }
+
+  async testApiConnection() {
+    const apiUrl = this.ui.apiUrl.value.trim();
+    const instanceName = this.ui.instanceName.value.trim();
+    const apiKey = this.ui.apiKey.value.trim();
+    if (!apiUrl || !instanceName || !apiKey) {
+      this.showToast('Completa los campos de la API.', 'warning');
+      return;
+    }
+    this.setLoading(this.ui.btnTestApi, this.ui.btnTestApiIcon, this.ui.btnTestApiText, true);
+    try {
+      const response = await fetch(apiUrl.replace(/\/+$/, '') + '/instance/connectionState/' + encodeURIComponent(instanceName), {
+        method: 'GET',
+        headers: { apikey: apiKey }
+      });
+      if (!response.ok) {
+        let message = await response.text();
+        try {
+          message = JSON.parse(message).message || message;
+        } catch (error) {}
+        throw new Error('HTTP ' + response.status + ': ' + message);
+      }
+      const data = await response.json();
+      const state = (data && data.instance && data.instance.state) ? data.instance.state : 'desconocido';
+      this.state.lastApiState = String(state).toUpperCase();
+      this.ui.statusApi.textContent = 'API: ' + this.state.lastApiState;
+      this.showToast('¡Conexión exitosa! Estado: ' + this.state.lastApiState, 'success');
+      this.saveConfig();
+    } catch (error) {
+      this.showToast('Error de conexión: ' + error.message, 'error');
+      this.ui.statusApi.textContent = 'API: Error';
+    } finally {
+      this.setLoading(this.ui.btnTestApi, this.ui.btnTestApiIcon, this.ui.btnTestApiText, false);
+    }
+  }
+
+  async extractError(response) {
+    let text = await response.text();
+    try {
+      const parsed = JSON.parse(text);
+      return parsed.message || parsed.error || text;
+    } catch (error) {
+      return text || ('HTTP ' + response.status);
+    }
+  }
+
+  async handleCsvFile(event) {
+    this.resetCampaignState(false);
+    const file = event.target.files && event.target.files[0];
+    if (!file) return;
+    this.ui.csvLabelText.textContent = 'Cargando: ' + file.name + ' ...';
+
+    const reader = new FileReader();
+    reader.onload = (evt) => { this.state.csvContent = evt.target.result; };
+    reader.readAsText(file);
+
+    const ok = await this.ensurePapa();
+    if (!ok) {
+      this.ui.csvLabelText.textContent = 'Seleccionar archivo CSV';
+      return;
+    }
+
+    window.Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      worker: false,
+      dynamicTyping: false,
+      transformHeader: (header) => (header || '').trim(),
+      complete: (result) => {
+        try {
+          const hasRows = result?.data?.length > 0;
+          const fields = result?.meta?.fields || [];
+          if (!hasRows || !fields.length) {
+            this.showToast('CSV vacío o inválido. Asegúrate de incluir encabezados en la primera fila.', 'error');
+            this.ui.csvLabelText.textContent = 'Seleccionar archivo CSV';
+            this.ui.btnNextStep.disabled = true;
+            return;
+          }
+          this.state.csvData = result.data;
+          this.state.csvHeaders = fields;
+          this.populatePreviewTable();
+          this.populateColumnSelectors();
+          this.updateMessagePreview();
+          this.updatePreviewPhone();
+          this.ui.csvPreview.classList.remove('hidden');
+          this.ui.btnNextStep.disabled = false;
+          this.ui.csvLabelText.textContent = 'Archivo: ' + file.name + ' (' + this.state.csvData.length + ' filas)';
+          this.refreshChecklist();
+        } catch (error) {
+          this.showToast('Error al procesar CSV: ' + error.message, 'error');
+          this.ui.csvLabelText.textContent = 'Seleccionar archivo CSV';
+          this.ui.btnNextStep.disabled = true;
+        }
+      },
+      error: (error) => {
+        this.showToast('Error CSV: ' + (error && error.message ? error.message : String(error)), 'error');
+        this.ui.csvLabelText.textContent = 'Seleccionar archivo CSV';
+        this.ui.btnNextStep.disabled = true;
+      }
+    });
+  }
+
+  populatePreviewTable() {
+    this.ui.totalRows.textContent = String(this.state.csvData.length);
+    let html = '<thead class="bg-gray-50"><tr>';
+    this.state.csvHeaders.forEach((header) => {
+      html += '<th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">' + header + '</th>';
+    });
+    html += '</tr></thead><tbody class="bg-white divide-y divide-gray-200">';
+    const rows = this.state.csvData.slice(0, 10);
+    for (let rowIndex = 0; rowIndex < rows.length; rowIndex++) {
+      const row = rows[rowIndex];
+      html += '<tr>';
+      for (let columnIndex = 0; columnIndex < this.state.csvHeaders.length; columnIndex++) {
+        const header = this.state.csvHeaders[columnIndex];
+        const value = (row[header] != null ? row[header] : '');
+        html += '<td class="px-3 py-2 whitespace-nowrap text-sm text-gray-600">' + String(value) + '</td>';
+      }
+      html += '</tr>';
+    }
+    html += '</tbody>';
+    this.ui.csvTable.innerHTML = html;
+  }
+
+  populateColumnSelectors() {
+    this.ui.csvColumnsContainer.innerHTML = '';
+    this.ui.phoneColumnSelect.innerHTML = '';
+    this.ui.filter.column.innerHTML = '';
+    const phoneKeywords = ['phone','telefono','teléfono','celular','móvil','movil','whatsapp','numero','número'];
+    let best = '';
+
+    for (let index = 0; index < this.state.csvHeaders.length; index++) {
+      const header = this.state.csvHeaders[index];
+      const chip = document.createElement('button');
+      chip.className = 'px-2 py-1 bg-gray-200 text-gray-700 text-xs rounded hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-offset-1';
+      chip.type = 'button';
+      chip.textContent = '{{' + header + '}}';
+      chip.addEventListener('click', () => this.insertVar(header));
+      this.ui.csvColumnsContainer.appendChild(chip);
+
+      const option = document.createElement('option');
+      option.value = header;
+      option.textContent = header;
+      const optionClone = option.cloneNode(true);
+      this.ui.phoneColumnSelect.appendChild(option);
+      this.ui.filter.column.appendChild(optionClone);
+
+      if (!best) {
+        const lower = header.toLowerCase();
+        for (const keyword of phoneKeywords) {
+          if (lower.includes(keyword)) {
+            best = header;
+            break;
+          }
+        }
+      }
+    }
+
+    let draft = null;
+    try {
+      const draftRaw = localStorage.getItem(this.state.draftKey);
+      draft = draftRaw ? JSON.parse(draftRaw) : null;
+    } catch (error) {}
+
+    if (draft && draft.phoneCol && this.state.csvHeaders.indexOf(draft.phoneCol) > -1) this.ui.phoneColumnSelect.value = draft.phoneCol;
+    else if (best) this.ui.phoneColumnSelect.value = best;
+
+    if (draft && draft.filter && draft.filter.col && this.state.csvHeaders.indexOf(draft.filter.col) > -1) this.ui.filter.column.value = draft.filter.col;
+    if (draft && draft.filter && draft.filter.op) this.ui.filter.operator.value = draft.filter.op;
+    if (draft && draft.filter && draft.filter.val) this.ui.filter.value.value = draft.filter.val;
+
+    if (this.ui.filter.enabled.checked) this.updateFilterSummary();
+  }
+
+  insertVar(header) {
+    const textarea = this.ui.messageTemplate;
+    const token = '{{' + header + '}}';
+    const cursor = typeof textarea.selectionStart === 'number' ? textarea.selectionStart : textarea.value.length;
+    textarea.value = textarea.value.slice(0, cursor) + token + textarea.value.slice(cursor);
+    textarea.focus();
+    textarea.selectionEnd = cursor + token.length;
+    this.updateMessagePreview();
+    this.saveDraft();
+  }
+
+  escapeRegExp(value) {
+    return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  compileMessage(template, row) {
+    let message = String(template || '');
+    for (let index = 0; index < this.state.csvHeaders.length; index++) {
+      const header = this.state.csvHeaders[index];
+      const regex = new RegExp('\\{\\{' + this.escapeRegExp(header) + '\\}\\}', 'g');
+      message = message.replace(regex, (row[header] != null ? row[header] : ''));
+    }
+    return message;
+  }
+
+  updateMessagePreview() {
+    if (!this.state.csvData.length) {
+      this.ui.messagePreview.textContent = 'Escribe un mensaje para ver la vista previa...';
+      return;
+    }
+    const first = this.state.csvData[0];
+    const preview = this.compileMessage(this.ui.messageTemplate.value, first);
+    this.ui.messagePreview.textContent = preview || 'Escribe un mensaje para ver la vista previa...';
+  }
+
+  updatePreviewPhone() {
+    if (!this.state.csvData.length || !this.ui.phoneColumnSelect.value) {
+      this.ui.previewPhone.textContent = '';
+      return;
+    }
+    const raw = this.state.csvData[0][this.ui.phoneColumnSelect.value];
+    const e164 = this.toE164(raw, this.ui.countryCode.value || '57');
+    this.ui.previewPhone.textContent = e164 ? ('Primer número (E.164): +' + e164) : 'Primer número inválido para el país seleccionado';
+  }
+
+  getTemplates() {
+    const raw = localStorage.getItem(this.state.templatesKey);
+    try {
+      return raw ? JSON.parse(raw) : [];
+    } catch (error) {
+      console.warn('No se pudieron cargar las plantillas guardadas', error);
+      return [];
+    }
+  }
+
+  setTemplates(list) {
+    localStorage.setItem(this.state.templatesKey, JSON.stringify(list));
+  }
+
+  loadTemplatesUI() {
+    this.renderTemplateList();
+    this.renderCategoryFilter();
+  }
+
+  renderTemplateList() {
+    const search = (this.ui.tplSearch.value || '').toLowerCase();
+    const category = this.ui.tplCategoryFilter.value || '';
+    const list = this.getTemplates().filter((template) => {
+      const passCategory = !category || template.category === category;
+      const body = (template.template || '').toLowerCase();
+      const passText = !search || (template.name || '').toLowerCase().includes(search) || body.includes(search);
+      return passCategory && passText;
+    });
+    this.ui.tplList.innerHTML = '';
+    list.forEach((template) => {
+      const item = document.createElement('li');
+      item.className = 'flex items-start justify-between gap-2 p-2 border rounded hover:bg-gray-50 cursor-pointer';
+      const snippet = (template.template || '').slice(0, 120) + ((template.template || '').length > 120 ? '…' : '');
+      item.innerHTML = '<div><div class="font-semibold">' + template.name + '</div><div class="text-xs text-gray-500">' + (template.category || '—') + '</div><div class="text-xs mt-1">' + snippet + '</div></div><button class="text-indigo-600 text-sm">Cargar</button>';
+      item.querySelector('button').addEventListener('click', (event) => {
+        event.stopPropagation();
+        this.ui.messageTemplate.value = template.template || '';
+        this.ui.msgType.value = template.msgType || 'text';
+        this.ui.mediaUrl.value = template.mediaUrl || '';
+        this.ui.interactiveJson.value = template.interactiveJson || '';
+        this.updateMessagePreview();
+        this.saveDraft();
+      });
+      item.dataset.name = template.name;
+      this.ui.tplList.appendChild(item);
+    });
+  }
+
+  renderCategoryFilter() {
+    const categories = Array.from(new Set(this.getTemplates().map((template) => template.category).filter(Boolean)));
+    this.ui.tplCategoryFilter.innerHTML = '<option value="">Todas</option>' + categories.map((category) => '<option value="' + category + '">' + category + '</option>').join('');
+  }
+
+  saveCurrentTemplate() {
+    const name = (this.ui.tplName && this.ui.tplName.value && this.ui.tplName.value.trim()) || prompt('Nombre de la plantilla:');
+    if (!name) return;
+    const category = (this.ui.tplCategory && this.ui.tplCategory.value && this.ui.tplCategory.value.trim()) || '';
+    const template = {
+      name,
+      category,
+      template: this.ui.messageTemplate.value || '',
+      msgType: this.ui.msgType.value,
+      mediaUrl: this.ui.mediaUrl.value || '',
+      interactiveJson: this.ui.interactiveJson.value || '',
+      updatedAt: Date.now()
+    };
+    const list = this.getTemplates();
+    const existingIndex = list.findIndex((item) => item.name === name);
+    if (existingIndex >= 0) list[existingIndex] = template; else list.push(template);
+    this.setTemplates(list);
+    this.renderTemplateList();
+    this.renderCategoryFilter();
+    this.showToast('Plantilla guardada', 'success');
+  }
+
+  deleteSelectedTemplate() {
+    const selected = this.ui.tplList.querySelector('li.tpl-selected');
+    let name = selected && selected.dataset ? selected.dataset.name : '';
+    if (!name) name = prompt('Nombre de la plantilla a eliminar:');
+    if (!name) return;
+    const filtered = this.getTemplates().filter((item) => item.name !== name);
+    this.setTemplates(filtered);
+    this.renderTemplateList();
+    this.renderCategoryFilter();
+    this.showToast('Plantilla eliminada', 'info');
+  }
+
+  toggleFilterControls() {
+    if (this.ui.filter.enabled.checked) this.ui.filter.controls.classList.remove('hidden');
+    else this.ui.filter.controls.classList.add('hidden');
+    if (!this.ui.filter.enabled.checked) this.ui.filter.summary.classList.add('hidden');
+    else this.updateFilterSummary();
+    this.saveDraft();
+    this.refreshChecklist();
+  }
+
+  updateFilterSummary() {
+    if (!this.ui.filter.enabled.checked) return;
+    const columnOption = this.ui.filter.column.options[this.ui.filter.column.selectedIndex];
+    const operatorOption = this.ui.filter.operator.options[this.ui.filter.operator.selectedIndex];
+    const column = columnOption ? columnOption.text : '';
+    const operator = operatorOption ? operatorOption.text : '';
+    const value = this.ui.filter.value.value;
+    if (column && operator && value) {
+      this.ui.filter.summary.textContent = 'Filtro: ' + column + ' ' + operator + ' "' + value + '"';
+      this.ui.filter.summary.classList.remove('hidden');
+    } else {
+      this.ui.filter.summary.classList.add('hidden');
+    }
+  }
+
+  getFilteredData() {
+    if (!this.ui.filter.enabled.checked) return this.state.csvData;
+    const column = this.ui.filter.column.value;
+    const operator = this.ui.filter.operator.value;
+    const value = this.ui.filter.value.value;
+    if (!value) {
+      this.showToast('El valor del filtro no puede estar vacío.', 'warning');
+      return null;
+    }
+    const numericValue = parseFloat(value);
+    const isNumeric = !isNaN(numericValue);
+    return this.state.csvData.filter((row) => {
+      const rowValue = row[column];
+      const parsedRowValue = parseFloat(rowValue);
+      if (isNumeric && isNaN(parsedRowValue)) return false;
+      const a = isNumeric ? parsedRowValue : String(rowValue == null ? '' : rowValue).toLowerCase();
+      const b = isNumeric ? numericValue : String(value).toLowerCase();
+      switch (operator) {
+        case '==': return a == b;
+        case '!=': return a != b;
+        case '>': return a > b;
+        case '<': return a < b;
+        case 'contains': return typeof a === 'string' && a.indexOf(b) > -1;
+        default: return false;
+      }
+    });
+  }
+
+  refreshChecklist() {
+    const items = [];
+    const apiOk = this.state.lastApiState && this.state.lastApiState !== 'ERROR';
+    items.push({ ok: !!apiOk, text: 'API conectada: ' + (apiOk ? this.state.lastApiState : 'Sin probar') });
+
+    const column = this.ui.phoneColumnSelect.value;
+    items.push({ ok: !!column, text: 'Columna teléfono: ' + (column || '—') });
+
+    const delay = Number(this.ui.delay.value || 10);
+    const rate = Number(this.ui.rate.value || 0);
+    const jitter = Number(this.ui.jitter.value || 15);
+    const appliedDelay = rate > 0 ? Math.floor(60000 / rate) : delay * 1000;
+    items.push({ ok: true, text: 'Tasa aplicada: ' + (rate > 0 ? (rate + ' msg/min (~' + appliedDelay + ' ms)') : (delay + 's/MSG')) + ', jitter ±' + jitter + '%' });
+
+    const filtered = this.getFilteredData() || [];
+    const cc = this.ui.countryCode.value || '57';
+    const columnSelected = this.ui.phoneColumnSelect.value;
+    let valid = 0;
+    if (filtered.length && columnSelected) valid = filtered.map((row) => this.toE164(row[columnSelected], cc)).filter(Boolean).length;
+    items.push({ ok: valid > 0, text: 'Números válidos: ' + valid + ' / ' + filtered.length });
+
+    const dry = this.ui.dryrunEnabled.checked;
+    items.push({ ok: true, text: 'Simulación: ' + (dry ? 'Sí (NO enviará)' : 'No') });
+
+    const estimatedMs = valid * appliedDelay;
+    const etaText = valid ? this.prettyEta(estimatedMs) : '—';
+    items.push({ ok: valid > 0, text: 'Estimación duración: ' + etaText });
+
+    this.ui.precheckList.innerHTML = items.map((item) => '<li>' + (item.ok ? '✅' : '⚠️') + ' ' + item.text + '</li>').join('');
+    this.ui.statusRate.textContent = 'Rate: ' + (rate > 0 ? (rate + '/min') : (delay + 's/msg')) + ' (±' + jitter + '%)';
+    this.ui.statusEta.textContent = 'ETA: ' + etaText;
+  }
+
+  updateMetricsUI() {
+    this.ui.mSent.textContent = String(this.state.success);
+    this.ui.mErrors.textContent = String(this.state.errors);
+    this.ui.mSkipped.textContent = String(this.state.skipped);
+    const now = Date.now();
+    this.state.lastTickStamps = (this.state.lastTickStamps || []).filter((timestamp) => now - timestamp <= 60000);
+    this.ui.mRpm.textContent = String(this.state.lastTickStamps.length);
+    const left = Math.max(0, (this.state.queue ? this.state.queue.length : 0) - this.state.index);
+    const rate = Number(this.ui.rate.value || 0);
+    const delayMs = rate > 0 ? Math.floor(60000 / rate) : (Number(this.ui.delay.value || 10) * 1000);
+    const approx = left * delayMs;
+    const etaText = left ? this.prettyEta(approx) : '—';
+    this.ui.mEta.textContent = etaText;
+    this.ui.statusEta.textContent = 'ETA: ' + etaText;
+    this.ui.statusRate.textContent = 'Rate: ' + (rate > 0 ? (rate + '/min') : ((this.ui.delay.value || 10) + 's/msg'));
+  }
+
+  initScheduler() {
+    if (this.state.scheduler) clearInterval(this.state.scheduler);
+    this.state.scheduler = setInterval(async () => {
+      if (this.state.isSending) return;
+      const scheduled = this.getScheduledCampaigns();
+      const now = Date.now();
+      const toRun = scheduled.find((campaign) => new Date(campaign.scheduleDt).getTime() <= now);
+      if (toRun) {
+        this.showToast(`Iniciando campaña programada: ${toRun.name}`, 'info');
+        this.saveScheduledCampaigns(scheduled.filter((campaign) => campaign.id !== toRun.id));
+        await this.startSending(toRun);
+      }
+    }, 5000);
+  }
+
+  getScheduledCampaigns() {
+    return JSON.parse(localStorage.getItem(this.state.scheduledKey) || '[]');
+  }
+
+  saveScheduledCampaigns(campaigns) {
+    localStorage.setItem(this.state.scheduledKey, JSON.stringify(campaigns));
+    this.renderScheduledList();
+  }
+
+  getCampaignHistory() {
+    return JSON.parse(localStorage.getItem(this.state.historyKey) || '[]');
+  }
+
+  saveCampaignHistory(history) {
+    localStorage.setItem(this.state.historyKey, JSON.stringify(history));
+    this.renderHistoryList();
+  }
+
+  renderScheduledList() {
+    const campaigns = this.getScheduledCampaigns();
+    this.ui.scheduledCount.textContent = campaigns.length;
+    if (campaigns.length === 0) {
+      this.ui.scheduledList.innerHTML = '<p class="text-gray-500 text-center py-4">No hay campañas programadas.</p>';
+      return;
+    }
+    this.ui.scheduledList.innerHTML = campaigns.map((campaign) => `
+      <div class="p-3 border rounded-md flex justify-between items-center">
+        <div>
+          <p class="font-semibold">${campaign.name || 'Campaña sin nombre'}</p>
+          <p class="text-sm text-gray-500">Para: ${new Date(campaign.scheduleDt).toLocaleString()}</p>
+          <p class="text-xs text-gray-400">Contactos estimados: ${campaign.contactsCount}</p>
+        </div>
+        <div class="flex gap-2">
+          <button data-id="${campaign.id}" class="run-now-schedule-btn text-blue-600 hover:text-blue-800 text-sm">Iniciar ahora</button>
+          <button data-id="${campaign.id}" class="cancel-schedule-btn text-red-500 hover:text-red-700 text-sm">Eliminar</button>
+        </div>
+      </div>
+    `).join('');
+
+    this.ui.scheduledList.querySelectorAll('.cancel-schedule-btn').forEach((button) => {
+      button.addEventListener('click', (event) => {
+        const id = event.target.dataset.id;
+        if (confirm('¿Seguro que quieres eliminar esta campaña programada?')) {
+          const updated = this.getScheduledCampaigns().filter((campaign) => campaign.id !== id);
+          this.saveScheduledCampaigns(updated);
+          this.showToast('Campaña eliminada.', 'info');
+        }
+      });
+    });
+
+    this.ui.scheduledList.querySelectorAll('.run-now-schedule-btn').forEach((button) => {
+      button.addEventListener('click', async (event) => {
+        const id = event.target.dataset.id;
+        const all = this.getScheduledCampaigns();
+        const found = all.find((campaign) => campaign.id === id);
+        if (!found) return;
+        this.saveScheduledCampaigns(all.filter((campaign) => campaign.id !== id));
+        await this.startSending(found);
+        this.closeModal(this.ui.scheduledModal);
+      });
+    });
+  }
+
+  renderHistoryList() {
+    const history = this.getCampaignHistory();
+    if (history.length === 0) {
+      this.ui.historyList.innerHTML = '<p class="text-gray-500 text-center py-4">No hay campañas en el historial.</p>';
+      return;
+    }
+    this.ui.historyList.innerHTML = history.sort((a, b) => new Date(b.finishedAt) - new Date(a.finishedAt)).map((entry) => `
+      <div class="p-3 border rounded-md">
+        <div class="flex justify-between items-center">
+          <p class="font-semibold">${entry.name || 'Campaña sin nombre'}</p>
+          <p class="text-sm text-gray-400">${new Date(entry.finishedAt).toLocaleString()}</p>
+        </div>
+        <div class="text-xs mt-2 flex gap-4">
+          <span><span class="font-bold text-green-600">${entry.success}</span> Éxitos</span>
+          <span><span class="font-bold text-red-600">${entry.errors}</span> Errores</span>
+          <span><span class="font-bold">${entry.contactsCount}</span> Contactos</span>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  clearHistory() {
+    if (confirm('¿Estás seguro de que quieres borrar todo el historial? Esta acción no se puede deshacer.')) {
+      this.saveCampaignHistory([]);
+      this.showToast('Historial borrado.', 'info');
+    }
+  }
+
+  handleScheduleClick() {
+    const settings = this.getCurrentSettings(true);
+    if (!settings) return;
+    if (!settings.scheduleDt) {
+      this.showToast('Debes seleccionar una fecha y hora para programar.', 'warning');
+      return;
+    }
+    if (new Date(settings.scheduleDt).getTime() <= Date.now()) {
+      this.showToast('La fecha de programación debe ser en el futuro.', 'warning');
+      return;
+    }
+
+    const id = 'campaign_' + Date.now();
+    const newCampaign = { ...settings, id };
+    const campaigns = this.getScheduledCampaigns();
+    campaigns.push(newCampaign);
+    this.saveScheduledCampaigns(campaigns);
+
+    this.showToast(`Campaña "${settings.name}" programada con éxito.`, 'success');
+    this.ui.scheduleDt.value = '';
+    this.ui.campaignName.value = `Copia de ${settings.name}`;
+    this.saveDraft();
+  }
+
+  handleStartClick() {
+    if (this.ui.scheduleDt.value) {
+      this.showToast('Para iniciar ahora, deja el campo de fecha vacío. Para programar, usa "Programar Campaña".', 'warning');
+      return;
+    }
+    this.startSending(null);
+  }
+
+  getCurrentSettings(isScheduling = false) {
+    if (!this.ui.apiUrl.value.trim() || !this.ui.instanceName.value.trim() || !this.ui.apiKey.value.trim()) {
+      this.showToast('Configura la API.', 'warning');
+      return null;
+    }
+    if (!this.state.csvData.length) {
+      this.showToast('Carga un CSV válido.', 'warning');
+      return null;
+    }
+    if (!this.ui.messageTemplate.value.trim() && this.ui.msgType.value === 'text') {
+      this.showToast('El mensaje no puede estar vacío.', 'warning');
+      return null;
+    }
+    if (!this.ui.phoneColumnSelect.value) {
+      this.showToast('Selecciona la columna de teléfono.', 'warning');
+      return null;
+    }
+
+    if (isScheduling && !this.state.csvContent) {
+      this.showToast('Vuelve a seleccionar el archivo CSV antes de programar.', 'warning');
+      return null;
+    }
+
+    let dataToSend = this.getFilteredData();
+    if (dataToSend === null) return null;
+    let mapped = dataToSend.map((row) => ({ row, e164: this.toE164(row[this.ui.phoneColumnSelect.value], this.ui.countryCode.value), retries: 0 })).filter((item) => !!item.e164);
+    if (this.ui.dedupeEnabled.checked) {
+      const seen = new Set();
+      mapped = mapped.filter((item) => (seen.has(item.e164) ? false : (seen.add(item.e164), true)));
+    }
+    if (!mapped.length) {
+      this.showToast('No hay números válidos para enviar.', 'warning');
+      return null;
+    }
+
+    return {
+      name: this.ui.campaignName.value.trim() || `Campaña ${new Date().toLocaleDateString()}`,
+      apiUrl: this.ui.apiUrl.value.trim(),
+      instance: this.ui.instanceName.value.trim(),
+      key: this.ui.apiKey.value.trim(),
+      phoneCol: this.ui.phoneColumnSelect.value,
+      cc: this.ui.countryCode.value,
+      delay: Number(this.ui.delay.value || 10),
+      rate: Number(this.ui.rate.value || 0),
+      jitter: Number(this.ui.jitter.value || 15),
+      retries: Number(this.ui.retries.value || 2),
+      dedupe: this.ui.dedupeEnabled.checked,
+      dryrun: this.ui.dryrunEnabled.checked,
+      msgType: this.ui.msgType.value,
+      mediaUrl: this.ui.mediaUrl.value || '',
+      interactiveJson: this.ui.interactiveJson.value || '',
+      template: this.ui.messageTemplate.value || '',
+      csvContent: isScheduling ? this.state.csvContent : null,
+      scheduleDt: this.ui.scheduleDt.value || '',
+      contactsCount: mapped.length
+    };
+  }
+
+  async startSending(campaignConfig = null) {
+    let settings;
+    if (campaignConfig) {
+      settings = campaignConfig;
+      const papaLoaded = await this.ensurePapa();
+      if (!papaLoaded) {
+        this.showToast('No se pudo iniciar campaña: falta PapaParse.', 'error');
+        return;
+      }
+      const parsedCsv = window.Papa.parse(settings.csvContent, { header: true, skipEmptyLines: true });
+      this.state.csvData = parsedCsv.data;
+      this.state.csvHeaders = parsedCsv.meta.fields || [];
+      this.state.csvContent = settings.csvContent || '';
+      this.state.currentCampaignId = campaignConfig.id;
+    } else {
+      settings = this.getCurrentSettings(false);
+      if (!settings) return;
+      if (!confirm(`Se enviarán ${settings.contactsCount} mensajes. ¿Deseas continuar?`)) {
+        this.showToast('Envío cancelado.', 'info');
+        return;
+      }
+      this.state.currentCampaignId = 'manual_' + Date.now();
+    }
+
+    let dataToSend = this.getFilteredData();
+    let mapped = dataToSend.map((row) => ({ row, e164: this.toE164(row[settings.phoneCol], settings.cc), retries: 0 })).filter((item) => !!item.e164);
+    if (settings.dedupe) {
+      const seen = new Set();
+      mapped = mapped.filter((item) => (seen.has(item.e164) ? false : (seen.add(item.e164), true)));
+    }
+
+    this.state.queue = mapped;
+    this.state.index = 0;
+    this.state.success = 0;
+    this.state.errors = 0;
+    this.state.skipped = 0;
+    this.state.startedAt = Date.now();
+    this.state.lastTickStamps = [];
+    this.ui.logOutput.innerHTML = '';
+    this.ui.finalSummary.classList.add('hidden');
+
+    this.setSendingState(true);
+    this.log(`Iniciando envío de campaña "${settings.name}"...`, 'info');
+    this.saveCampaignState(settings);
+    this.loopSend(settings);
+  }
+
+  setSendingState(isSending) {
+    this.state.isSending = isSending;
+    this.ui.btnStart.disabled = isSending;
+    this.ui.btnSchedule.disabled = isSending;
+    this.ui.btnPause.disabled = !isSending;
+    this.ui.btnStop.disabled = !isSending;
+    this.ui.liveMetricsSection.classList.toggle('hidden', !isSending);
+
+    const spinner = '<div class="spinner mr-2"></div>';
+    const sendIcon = '<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>';
+    const btnStartText = this.ui.btnStart.querySelector('#btn-start-text');
+    if (btnStartText) btnStartText.textContent = isSending ? 'Enviando...' : 'Iniciar Ahora';
+    this.ui.btnStart.querySelector('#btn-start-icon').innerHTML = isSending ? spinner : sendIcon;
+
+    const disableElements = [
+      this.ui.apiUrl, this.ui.instanceName, this.ui.apiKey, this.ui.csvFileInput,
+      this.ui.delay, this.ui.rate, this.ui.jitter, this.ui.retries, this.ui.phoneColumnSelect, this.ui.messageTemplate,
+      this.ui.btnBack, this.ui.btnTestApi, this.ui.btnNextStep, this.ui.btnClearStorage,
+      this.ui.filter.enabled, this.ui.filter.column, this.ui.filter.operator, this.ui.filter.value,
+      this.ui.countryCode, this.ui.dedupeEnabled, this.ui.dryrunEnabled,
+      this.ui.msgType, this.ui.mediaUrl, this.ui.interactiveJson, this.ui.scheduleDt, this.ui.campaignName,
+      this.ui.btnOpenScheduled, this.ui.btnOpenHistory
+    ];
+    disableElements.forEach((element) => { if (element) element.disabled = isSending; });
+
+    if (isSending) this.ui.filter.controls.classList.add('hidden');
+    else if (this.ui.filter.enabled.checked) this.ui.filter.controls.classList.remove('hidden');
+  }
+
+  togglePause() {
+    if (!this.state.isSending) return;
+    this.state.isPaused = !this.state.isPaused;
+    this.ui.btnPause.textContent = this.state.isPaused ? 'Reanudar' : 'Pausar';
+    this.log(this.state.isPaused ? '⏸️ Pausado' : '▶️ Reanudado', 'info');
+    const stored = this.loadCampaignState();
+    if (stored) {
+      stored.isPaused = this.state.isPaused;
+      localStorage.setItem(this.state.resumeToken, JSON.stringify(stored));
+    }
+  }
+
+  async loopSend(settings) {
+    const rate = settings.rate > 0 ? settings.rate : 0;
+    const baseDelayMs = rate > 0 ? Math.floor(60000 / rate) : settings.delay * 1000;
+
+    while (this.state.isSending && this.state.index < this.state.queue.length) {
+      while (this.state.isPaused && this.state.isSending) {
+        await this.sleep(250);
+      }
+      if (!this.state.isSending) {
+        this.log('Envío detenido por el usuario.', 'warning');
+        break;
+      }
+
+      const currentIndex = this.state.index;
+      const item = this.state.queue[currentIndex];
+      const finalMessage = this.compileMessage(settings.template, item.row);
+      const dry = settings.dryrun;
+
+      this.ui.progressBar.style.width = (((currentIndex + 1) / this.state.queue.length) * 100) + '%';
+      this.log('(' + (currentIndex + 1) + '/' + this.state.queue.length + ') ' + (dry ? '[SIM] ' : '') + 'Enviando a +' + item.e164 + '...', 'info');
+
+      try {
+        if (!dry) {
+          await this.sendViaEvolution(settings, item.e164, finalMessage);
+        }
+        this.state.success++;
+        this.state.lastTickStamps.push(Date.now());
+        this.log('(' + (currentIndex + 1) + '/' + this.state.queue.length + ') Éxito.', 'success');
+      } catch (error) {
+        if (item.retries < settings.retries) {
+          item.retries++;
+          const backoff = Math.min(30000, Math.pow(3, item.retries) * 1000);
+          this.log('Error: ' + error.message + '. Reintentando (' + item.retries + '/' + settings.retries + ') en ' + Math.round(backoff / 1000) + 's', 'warning');
+          await this.sleep(backoff);
+          this.saveCampaignState(settings);
+          continue;
+        } else {
+          this.state.errors++;
+          this.log('Error definitivo al enviar a +' + item.e164 + ': ' + error.message, 'error');
+        }
+      }
+
+      this.state.index++;
+      this.updateMetricsUI();
+      this.saveCampaignState(settings);
+
+      if (this.state.index < this.state.queue.length && this.state.isSending) {
+        const wait = this.jitterMs(baseDelayMs, settings.jitter);
+        await this.sleep(wait);
+      }
+    }
+
+    this.state.isSending = false;
+    this.setSendingState(false);
+    this.ui.btnDownloadLog.classList.remove('hidden');
+    this.log('\n--- Proceso finalizado. ---', 'info');
+    this.showFinalSummary(this.state.success, this.state.errors, this.state.skipped);
+
+    const historyEntry = {
+      id: this.state.currentCampaignId,
+      name: settings.name,
+      finishedAt: new Date().toISOString(),
+      success: this.state.success,
+      errors: this.state.errors,
+      contactsCount: this.state.queue.length
+    };
+    const history = this.getCampaignHistory();
+    history.push(historyEntry);
+    this.saveCampaignHistory(history);
+    this.clearCampaignState();
+  }
+
+  async sendViaEvolution(settings, number, text) {
+    const urlBase = settings.apiUrl.replace(/\/+$/, '');
+    const inst = encodeURIComponent(settings.instance);
+    const headers = { 'Content-Type': 'application/json', apikey: settings.key };
+    const type = (settings.msgType || 'text').toLowerCase();
+    const adv = this.parseAdvancedOptions(settings.interactiveJson);
+    const throwIfBad = async (response) => {
+      const body = await this.extractError(response);
+      throw new Error(`HTTP ${response.status} - ${body}`);
+    };
+
+    if (type === 'text') {
+      const body = {
+        number,
+        text,
+        delay: adv.delay ?? 1200,
+        linkPreview: adv.linkPreview,
+        mentionsEveryOne: adv.mentionsEveryOne,
+        mentioned: adv.mentioned,
+        quoted: adv.quoted
+      };
+      const response = await fetch(`${urlBase}/message/sendText/${inst}`, {
+        method: 'POST', headers, body: JSON.stringify(body)
+      });
+      if (!response.ok) await throwIfBad(response);
+      await response.json().catch(() => {});
+      return;
+    }
+
+    if (['image','video','document'].includes(type)) {
+      const mediaUrl = (settings.mediaUrl || '').trim();
+      if (!mediaUrl) throw new Error('URL del archivo requerida');
+      const mediatype = type;
+      const guessedMime = this.guessMimeFromUrl(mediaUrl);
+      const mimetype = adv.mimetype || guessedMime;
+      const fileName = adv.fileName || (mediatype === 'document' ? this.fileNameFromUrl(mediaUrl) : undefined);
+      const payload = {
+        number,
+        mediatype,
+        media: mediaUrl,
+        caption: text || '',
+        ...(mimetype ? { mimetype } : {}),
+        ...(fileName ? { fileName } : {}),
+        delay: adv.delay,
+        linkPreview: adv.linkPreview,
+        mentionsEveryOne: adv.mentionsEveryOne,
+        mentioned: adv.mentioned,
+        quoted: adv.quoted
+      };
+      const response = await fetch(`${urlBase}/message/sendMedia/${inst}`, {
+        method: 'POST', headers, body: JSON.stringify(payload)
+      });
+      if (!response.ok) await throwIfBad(response);
+      await response.json().catch(() => {});
+      return;
+    }
+
+    if (type === 'audio') {
+      const mediaUrl = (settings.mediaUrl || '').trim();
+      if (!mediaUrl) throw new Error('URL del audio requerida');
+      const payload = {
+        number,
+        audio: mediaUrl,
+        ptt: !!adv.ptt,
+        voice: !!adv.voice,
+        seconds: adv.seconds,
+        delay: adv.delay,
+        quoted: adv.quoted
+      };
+      const response = await fetch(`${urlBase}/message/sendWhatsAppAudio/${inst}`, {
+        method: 'POST', headers, body: JSON.stringify(payload)
+      });
+      if (!response.ok) await throwIfBad(response);
+      await response.json().catch(() => {});
+      return;
+    }
+
+    if (type === 'sticker') {
+      const mediaUrl = (settings.mediaUrl || '').trim();
+      if (!mediaUrl) throw new Error('URL del sticker requerida');
+      const payload = {
+        number,
+        sticker: mediaUrl,
+        delay: adv.delay,
+        quoted: adv.quoted
+      };
+      const response = await fetch(`${urlBase}/message/sendSticker/${inst}`, {
+        method: 'POST', headers, body: JSON.stringify(payload)
+      });
+      if (!response.ok) await throwIfBad(response);
+      await response.json().catch(() => {});
+      return;
+    }
+
+    if (type === 'location') {
+      let payload;
+      try {
+        payload = JSON.parse(settings.interactiveJson || '{}');
+      } catch (error) {
+        throw new Error('JSON de ubicación inválido');
+      }
+      if (typeof payload.latitude !== 'number' || typeof payload.longitude !== 'number') {
+        throw new Error('Debes incluir "latitude" y "longitude" numéricos');
+      }
+      const body = {
+        number,
+        latitude: payload.latitude,
+        longitude: payload.longitude,
+        name: payload.name || undefined,
+        address: payload.address || undefined,
+        delay: adv.delay,
+        quoted: adv.quoted
+      };
+      const response = await fetch(`${urlBase}/message/sendLocation/${inst}`, {
+        method: 'POST', headers, body: JSON.stringify(body)
+      });
+      if (!response.ok) await throwIfBad(response);
+      await response.json().catch(() => {});
+      return;
+    }
+
+    if (type === 'contact') {
+      let payload;
+      try {
+        payload = JSON.parse(settings.interactiveJson || '{}');
+      } catch (error) {
+        throw new Error('JSON de contacto inválido');
+      }
+      if (!Array.isArray(payload.contacts) || !payload.contacts.length) {
+        throw new Error('El JSON debe incluir un arreglo "contacts"');
+      }
+      const body = { number, contacts: payload.contacts, delay: adv.delay, quoted: adv.quoted };
+      const response = await fetch(`${urlBase}/message/sendContact/${inst}`, {
+        method: 'POST', headers, body: JSON.stringify(body)
+      });
+      if (!response.ok) await throwIfBad(response);
+      await response.json().catch(() => {});
+      return;
+    }
+
+    if (type === 'list') {
+      let payload;
+      try {
+        payload = JSON.parse(settings.interactiveJson || '{}');
+      } catch (error) {
+        throw new Error('JSON interactivo inválido');
+      }
+      if (!payload.title || !payload.description || !payload.buttonText || !Array.isArray(payload.sections)) {
+        throw new Error('El JSON para lista debe incluir: title, description, buttonText y sections');
+      }
+      const body = { number, ...payload, delay: adv.delay, quoted: adv.quoted };
+      const response = await fetch(`${urlBase}/message/sendList/${inst}`, {
+        method: 'POST', headers, body: JSON.stringify(body)
+      });
+      if (!response.ok) await throwIfBad(response);
+      await response.json().catch(() => {});
+      return;
+    }
+
+    if (type === 'buttons') {
+      let payload;
+      try {
+        payload = JSON.parse(settings.interactiveJson || '{}');
+      } catch (error) {
+        throw new Error('JSON interactivo inválido');
+      }
+      if (!payload.title || !payload.description || !payload.footer || !Array.isArray(payload.buttons)) {
+        throw new Error('El JSON para botones debe incluir: title, description, footer y buttons');
+      }
+      const body = { number, ...payload, delay: adv.delay, quoted: adv.quoted };
+      const response = await fetch(`${urlBase}/message/sendButtons/${inst}`, {
+        method: 'POST', headers, body: JSON.stringify(body)
+      });
+      if (!response.ok) await throwIfBad(response);
+      await response.json().catch(() => {});
+      return;
+    }
+
+    throw new Error('Tipo de mensaje no soportado: ' + type);
+  }
+
+  showStep(step) {
+    this.ui.step1.classList.toggle('hidden', step !== 1);
+    this.ui.step2.classList.toggle('hidden', step !== 2);
+  }
+
+  resetCampaignState(resetDraft = true) {
+    this.state.csvData = [];
+    this.state.csvHeaders = [];
+    this.state.isSending = false;
+    this.state.isPaused = false;
+    this.state.index = 0;
+    this.state.success = 0;
+    this.state.errors = 0;
+    this.state.skipped = 0;
+    this.state.queue = [];
+    this.state.logContent = '';
+    this.ui.csvTable.innerHTML = '';
+    this.ui.csvColumnsContainer.innerHTML = '';
+    this.ui.phoneColumnSelect.innerHTML = '';
+    this.ui.totalRows.textContent = '0';
+    this.ui.progressBar.style.width = '0%';
+    this.ui.csvPreview.classList.add('hidden');
+    this.ui.btnNextStep.disabled = true;
+    this.ui.btnDownloadLog.classList.add('hidden');
+    this.ui.finalSummary.classList.add('hidden');
+    this.ui.logOutput.innerHTML = '<p class="text-gray-400">Listo para comenzar...</p>';
+    if (resetDraft) localStorage.removeItem(this.state.draftKey);
+    this.ui.filter.enabled.checked = false;
+    this.toggleFilterControls();
+    this.updateMetricsUI();
+  }
+
+  showFinalSummary(success, errors, skipped) {
+    this.ui.finalSummary.innerHTML = `
+      <h4 class="font-semibold text-lg mb-2">Campaña Finalizada</h4>
+      <div class="flex justify-center gap-6 text-center">
+        <div><span class="block text-2xl font-bold text-green-600">${success}</span><span class="text-sm text-gray-500">Éxitos</span></div>
+        <div><span class="block text-2xl font-bold text-red-600">${errors}</span><span class="text-sm text-gray-500">Errores</span></div>
+        <div><span class="block text-2xl font-bold text-yellow-600">${skipped}</span><span class="text-sm text-gray-500">Omitidos</span></div>
+      </div>`;
+    this.ui.finalSummary.classList.remove('hidden');
+    this.ui.btnDownloadLog.onclick = () => this.downloadLog();
+  }
+
+  downloadLog() {
+    const blob = new Blob([this.state.logContent], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    const timestamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+    anchor.href = url;
+    anchor.download = 'log-envio-' + timestamp + '.txt';
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  }
+}
+
+new WhatsAppSender();
+</script>
+</body>
+</html>
